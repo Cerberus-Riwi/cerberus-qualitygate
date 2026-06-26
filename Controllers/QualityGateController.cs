@@ -1,0 +1,65 @@
+using Microsoft.AspNetCore.Mvc;
+using QualityGateService.Models;
+using QualityGateService.Services;
+
+namespace QualityGateService.Controllers;
+
+[ApiController]
+[Route("api/quality-gate")]
+public sealed class QualityGateController(
+    IQualityGateEvaluatorService evaluatorService,
+    IRollbackService rollbackService,
+    ILogger<QualityGateController> logger) : ControllerBase
+{
+    /// <summary>
+    /// Evaluates normalized findings and returns the quality gate decision.
+    /// </summary>
+    [HttpPost("evaluate")]
+    [ProducesResponseType(typeof(QualityGateResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Evaluate([FromBody] ScanEvent scanEvent, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await evaluatorService.EvaluateAsync(scanEvent, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogWarning(ex, "Invalid quality gate evaluation request.");
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Quality gate evaluation failed.");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Quality gate evaluation failed." });
+        }
+    }
+
+    /// <summary>
+    /// Triggers rollback for the specified Kubernetes deployment.
+    /// </summary>
+    [HttpPost("rollback/{deploymentId}")]
+    [ProducesResponseType(typeof(RollbackResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Rollback([FromRoute] string deploymentId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await rollbackService.RollbackAsync(deploymentId, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogWarning(ex, "Invalid rollback request.");
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Rollback request failed for deployment {DeploymentId}", deploymentId);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Rollback request failed." });
+        }
+    }
+}
