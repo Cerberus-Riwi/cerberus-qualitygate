@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using QualityGateService.Config;
@@ -25,6 +27,12 @@ public sealed class QualityGateController(
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Evaluate([FromBody] ScanEvent scanEvent, CancellationToken cancellationToken)
     {
+        var tokenValidation = ValidateInternalToken();
+        if (tokenValidation is not null)
+        {
+            return tokenValidation;
+        }
+
         try
         {
             var result = await evaluatorService.EvaluateAsync(scanEvent, cancellationToken);
@@ -82,11 +90,20 @@ public sealed class QualityGateController(
         }
 
         if (!Request.Headers.TryGetValue("X-Internal-Token", out var token)
-            || !string.Equals(token, _settings.InternalToken, StringComparison.Ordinal))
+            || !TokenMatches(token.ToString(), _settings.InternalToken))
         {
             return Unauthorized(new { error = "Invalid internal token." });
         }
 
         return null;
+    }
+
+    private static bool TokenMatches(string providedToken, string expectedToken)
+    {
+        var providedBytes = Encoding.UTF8.GetBytes(providedToken);
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedToken);
+
+        return providedBytes.Length == expectedBytes.Length
+            && CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
     }
 }

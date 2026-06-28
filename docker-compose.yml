@@ -21,6 +21,7 @@ services:
       KUBERNETES_NAMESPACE: ${KUBERNETES_NAMESPACE:-cerberus}
       K8S_API_URL: ${K8S_API_URL:-https://kubernetes.default.svc}
       K8S_SERVICE_ACCOUNT_TOKEN: ${K8S_SERVICE_ACCOUNT_TOKEN:-}
+      K8S_SERVICE_ACCOUNT_TOKEN_PATH: ${K8S_SERVICE_ACCOUNT_TOKEN_PATH:-/var/run/secrets/kubernetes.io/serviceaccount/token}
     ports:
       - "5070:8080"
     restart: unless-stopped

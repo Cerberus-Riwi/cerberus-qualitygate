@@ -55,12 +55,21 @@ public sealed class QualityGateEvaluatorService(
         if (result.RollbackTriggered && !string.IsNullOrWhiteSpace(result.DeploymentId))
         {
             var rollbackResult = await rollbackService.RollbackAsync(result.DeploymentId, cancellationToken);
+            result.RollbackExecuted = rollbackResult.RolledBack;
+            result.RollbackMessage = rollbackResult.Message;
 
             logger.LogWarning(
                 "Rollback result for deployment {DeploymentId}: {RolledBack}. {Message}",
                 rollbackResult.DeploymentId,
                 rollbackResult.RolledBack,
                 rollbackResult.Message);
+        }
+        else if (result.Verdict == QualityGateVerdicts.Fail)
+        {
+            logger.LogError(
+                "Quality gate failed for scan {ScanId}, but rollback was not executed. Reason: {Reason}",
+                result.ScanId,
+                result.RollbackMessage);
         }
 
         dbContext.Findings.AddRange(scanResults.SelectMany(scanResult => scanResult.Findings));

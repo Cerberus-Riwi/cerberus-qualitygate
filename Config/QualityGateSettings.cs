@@ -35,6 +35,8 @@ public sealed class QualityGateSettings
 
     public string? KubernetesServiceAccountToken { get; set; }
 
+    public string KubernetesServiceAccountTokenPath { get; set; } = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+
     [Range(1, int.MaxValue)]
     public int ExpectedScanResultsPerScan { get; set; } = 2;
 

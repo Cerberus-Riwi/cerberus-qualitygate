@@ -16,6 +16,7 @@ builder.Services
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -50,6 +51,7 @@ builder.Services
         settings.KubernetesNamespace = GetSetting(configuration, "KUBERNETES_NAMESPACE", settings.KubernetesNamespace);
         settings.KubernetesApiUrl = GetSetting(configuration, "K8S_API_URL", settings.KubernetesApiUrl);
         settings.KubernetesServiceAccountToken = GetOptionalSetting(configuration, "K8S_SERVICE_ACCOUNT_TOKEN", settings.KubernetesServiceAccountToken);
+        settings.KubernetesServiceAccountTokenPath = GetSetting(configuration, "K8S_SERVICE_ACCOUNT_TOKEN_PATH", settings.KubernetesServiceAccountTokenPath);
         settings.InternalToken = GetOptionalSetting(configuration, "QUALITY_GATE_INTERNAL_TOKEN", settings.InternalToken);
 
         if (int.TryParse(configuration["EXPECTED_SCAN_RESULTS_PER_SCAN"], out var expectedScanResultsPerScan))

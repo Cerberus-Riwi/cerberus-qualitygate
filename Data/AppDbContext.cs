@@ -33,6 +33,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(result => result.Verdict).HasMaxLength(32).IsRequired();
             entity.OwnsOne(result => result.Summary);
             entity.Ignore(result => result.Results);
+            entity.Ignore(result => result.Action);
+            entity.Ignore(result => result.Passed);
+            entity.Ignore(result => result.RollbackExecuted);
+            entity.Ignore(result => result.RollbackMessage);
             entity.Property(result => result.DeploymentId).HasMaxLength(256);
             entity.HasIndex(result => result.ScanId);
             entity.HasIndex(result => result.DeploymentId);

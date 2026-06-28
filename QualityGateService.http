@@ -12,6 +12,7 @@ Accept: application/json
 
 POST {{QualityGateService_HostAddress}}/api/quality-gate/evaluate
 Content-Type: application/json
+X-Internal-Token: {{$dotenv QUALITY_GATE_INTERNAL_TOKEN}}
 
 {
   "scanId": "11111111-1111-1111-1111-111111111111",
@@ -42,6 +43,6 @@ Content-Type: application/json
 
 POST {{QualityGateService_HostAddress}}/api/quality-gate/rollback/orders-api
 Accept: application/json
-X-Internal-Token: cerberus-internal-2026
+X-Internal-Token: {{$dotenv QUALITY_GATE_INTERNAL_TOKEN}}
 
 ###

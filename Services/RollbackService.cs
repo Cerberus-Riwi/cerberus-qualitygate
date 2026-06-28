@@ -24,7 +24,7 @@ public sealed class RollbackService(
         var timestamp = DateTime.UtcNow;
         var commandPreview = $"kubectl rollout undo deployment/{deploymentId} --namespace={_settings.KubernetesNamespace}";
 
-        var serviceAccountToken = _settings.KubernetesServiceAccountToken;
+        var serviceAccountToken = ResolveServiceAccountToken();
         if (string.IsNullOrWhiteSpace(serviceAccountToken))
         {
             logger.LogError("Kubernetes token is not configured. Rollback cannot be executed: {Command}", commandPreview);
@@ -173,5 +173,21 @@ public sealed class RollbackService(
             out var revision)
             ? revision
             : 0;
+    }
+
+    private string? ResolveServiceAccountToken()
+    {
+        if (!string.IsNullOrWhiteSpace(_settings.KubernetesServiceAccountToken))
+        {
+            return _settings.KubernetesServiceAccountToken;
+        }
+
+        if (string.IsNullOrWhiteSpace(_settings.KubernetesServiceAccountTokenPath)
+            || !File.Exists(_settings.KubernetesServiceAccountTokenPath))
+        {
+            return null;
+        }
+
+        return File.ReadAllText(_settings.KubernetesServiceAccountTokenPath).Trim();
     }
 }

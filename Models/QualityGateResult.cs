@@ -12,10 +12,13 @@ public sealed class QualityGateResult
     public SeveritySummary Summary { get; set; } = new();
     public List<ScanResult> Results { get; set; } = [];
     public bool RollbackTriggered { get; set; }
+    public bool RollbackExecuted { get; set; }
+    public string RollbackMessage { get; set; } = string.Empty;
+    public string Action { get; set; } = QualityGateActions.None;
     public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
+    public string DeploymentId { get; set; } = string.Empty;
 
-    [JsonIgnore]
-    public string? DeploymentId { get; set; }
+    public bool Passed => Verdict == QualityGateVerdicts.Pass;
 }
 
 public sealed class SeveritySummary
@@ -32,4 +35,10 @@ public static class QualityGateVerdicts
     public const string Fail = "fail";
     public const string Warning = "warning";
     public const string Pass = "pass";
+}
+
+public static class QualityGateActions
+{
+    public const string None = "none";
+    public const string Rollback = "rollback";
 }

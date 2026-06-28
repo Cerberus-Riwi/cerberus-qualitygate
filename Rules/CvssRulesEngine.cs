@@ -26,6 +26,7 @@ public sealed class CvssRulesEngine
 
         var summary = BuildSummary(scanResults);
         var verdict = EvaluateVerdict(summary);
+        var shouldRollback = verdict == QualityGateVerdicts.Fail;
 
         return new QualityGateResult
         {
@@ -33,9 +34,13 @@ public sealed class CvssRulesEngine
             Verdict = verdict,
             Summary = summary,
             Results = scanResults.ToList(),
-            RollbackTriggered = verdict == QualityGateVerdicts.Fail,
+            RollbackTriggered = shouldRollback && !string.IsNullOrWhiteSpace(deploymentId),
+            RollbackMessage = shouldRollback && string.IsNullOrWhiteSpace(deploymentId)
+                ? "Rollback skipped: deploymentId is required."
+                : string.Empty,
+            Action = shouldRollback ? QualityGateActions.Rollback : QualityGateActions.None,
             IssuedAt = DateTime.UtcNow,
-            DeploymentId = deploymentId
+            DeploymentId = deploymentId ?? string.Empty
         };
     }
 
