@@ -42,6 +42,8 @@ builder.Services
     .PostConfigure<IConfiguration>((settings, configuration) =>
     {
         settings.RabbitMQHost = GetSetting(configuration, "RABBITMQ_HOST", settings.RabbitMQHost);
+        settings.RabbitMQUsername = GetSetting(configuration, "RABBITMQ_USERNAME", settings.RabbitMQUsername);
+        settings.RabbitMQPassword = GetSetting(configuration, "RABBITMQ_PASSWORD", settings.RabbitMQPassword);
         settings.RabbitMQQueue = GetSetting(configuration, "RABBITMQ_QUEUE", settings.RabbitMQQueue);
         settings.RabbitMQExchange = GetSetting(configuration, "RABBITMQ_EXCHANGE", settings.RabbitMQExchange);
         settings.RabbitMQResultsExchange = GetSetting(configuration, "RABBITMQ_RESULTS_EXCHANGE", settings.RabbitMQResultsExchange);
@@ -53,6 +55,11 @@ builder.Services
         if (int.TryParse(configuration["EXPECTED_SCAN_RESULTS_PER_SCAN"], out var expectedScanResultsPerScan))
         {
             settings.ExpectedScanResultsPerScan = expectedScanResultsPerScan;
+        }
+
+        if (int.TryParse(configuration["RABBITMQ_PORT"], out var rabbitMqPort))
+        {
+            settings.RabbitMQPort = rabbitMqPort;
         }
 
         if (int.TryParse(configuration["PENDING_SCAN_TIMEOUT_SECONDS"], out var pendingScanTimeoutSeconds))

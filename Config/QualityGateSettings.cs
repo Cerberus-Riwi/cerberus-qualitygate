@@ -9,6 +9,15 @@ public sealed class QualityGateSettings
     [Required]
     public string RabbitMQHost { get; set; } = "localhost";
 
+    [Range(1, 65535)]
+    public int RabbitMQPort { get; set; } = 5672;
+
+    [Required]
+    public string RabbitMQUsername { get; set; } = "guest";
+
+    [Required]
+    public string RabbitMQPassword { get; set; } = "guest";
+
     [Required]
     public string RabbitMQQueue { get; set; } = "cerberus.quality-gate.queue";
 

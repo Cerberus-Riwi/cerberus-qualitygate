@@ -32,6 +32,9 @@ public sealed class RabbitMQConsumerService(
             var factory = new ConnectionFactory
             {
                 HostName = _settings.RabbitMQHost,
+                Port = _settings.RabbitMQPort,
+                UserName = _settings.RabbitMQUsername,
+                Password = _settings.RabbitMQPassword,
                 DispatchConsumersAsync = true
             };
 

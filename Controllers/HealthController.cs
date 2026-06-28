@@ -41,7 +41,14 @@ public sealed class HealthController(
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, new { status = "not ready", reason = "PostgreSQL unavailable" });
             }
 
-            var factory = new ConnectionFactory { HostName = options.Value.RabbitMQHost };
+            var settings = options.Value;
+            var factory = new ConnectionFactory
+            {
+                HostName = settings.RabbitMQHost,
+                Port = settings.RabbitMQPort,
+                UserName = settings.RabbitMQUsername,
+                Password = settings.RabbitMQPassword
+            };
             using var connection = factory.CreateConnection();
             using var channel = connection.CreateModel();
 
