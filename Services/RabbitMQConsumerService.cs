@@ -18,6 +18,7 @@ public sealed class RabbitMQConsumerService(
     private readonly QualityGateSettings _settings = options.Value;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 

@@ -12,12 +12,21 @@ public sealed class QualityGateResult
     public SeveritySummary Summary { get; set; } = new();
     public List<ScanResult> Results { get; set; } = [];
     public bool RollbackTriggered { get; set; }
+
+    [JsonIgnore]
     public bool RollbackExecuted { get; set; }
+
+    [JsonIgnore]
     public string RollbackMessage { get; set; } = string.Empty;
+
+    [JsonIgnore]
     public string Action { get; set; } = QualityGateActions.None;
     public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
+
+    [JsonIgnore]
     public string DeploymentId { get; set; } = string.Empty;
 
+    [JsonIgnore]
     public bool Passed => Verdict == QualityGateVerdicts.Pass;
 }
 
