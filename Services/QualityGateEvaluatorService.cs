@@ -19,22 +19,43 @@ public sealed class QualityGateEvaluatorService(
             throw new ArgumentException("ScanId is required.", nameof(scanEvent));
         }
 
-        scanEvent.Findings ??= [];
-        foreach (var finding in scanEvent.Findings)
+        return await EvaluateAsync(scanEvent.ToScanResults().ToList(), scanEvent.DeploymentId, cancellationToken);
+    }
+
+    public async Task<QualityGateResult> EvaluateAsync(
+        IReadOnlyCollection<ScanResult> scanResults,
+        string? deploymentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scanResults);
+
+        if (scanResults.Count == 0)
         {
-            finding.ScanId = scanEvent.ScanId;
+            throw new ArgumentException("At least one scan-result is required.", nameof(scanResults));
         }
 
-        var result = rulesEngine.Evaluate(scanEvent);
-        logger.LogInformation(
-            "Quality gate evaluated for scan {ScanId}. Passed: {Passed}. Action: {Action}",
-            result.ScanId,
-            result.Passed,
-            result.Action);
+        var scanId = scanResults.First().ScanId;
+        if (scanId == Guid.Empty)
+        {
+            throw new ArgumentException("ScanId is required.", nameof(scanResults));
+        }
 
-        if (result.Action == QualityGateAction.Rollback && !string.IsNullOrWhiteSpace(result.DeploymentId))
+        foreach (var finding in scanResults.SelectMany(result => result.Findings))
+        {
+            finding.ScanId = scanId;
+        }
+
+        var result = rulesEngine.Evaluate(scanResults, deploymentId);
+        logger.LogInformation(
+            "Quality gate evaluated for scan {ScanId}. Verdict: {Verdict}. Rollback triggered: {RollbackTriggered}",
+            result.ScanId,
+            result.Verdict,
+            result.RollbackTriggered);
+
+        if (result.RollbackTriggered && !string.IsNullOrWhiteSpace(result.DeploymentId))
         {
             var rollbackResult = await rollbackService.RollbackAsync(result.DeploymentId, cancellationToken);
+
             logger.LogWarning(
                 "Rollback result for deployment {DeploymentId}: {RolledBack}. {Message}",
                 rollbackResult.DeploymentId,
@@ -42,7 +63,7 @@ public sealed class QualityGateEvaluatorService(
                 rollbackResult.Message);
         }
 
-        dbContext.Findings.AddRange(scanEvent.Findings);
+        dbContext.Findings.AddRange(scanResults.SelectMany(scanResult => scanResult.Findings));
         dbContext.QualityGateResults.Add(result);
         await dbContext.SaveChangesAsync(cancellationToken);
 

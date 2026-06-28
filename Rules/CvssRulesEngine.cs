@@ -1,58 +1,69 @@
-using Microsoft.Extensions.Options;
-using QualityGateService.Config;
 using QualityGateService.Models;
 
 namespace QualityGateService.Rules;
 
-public sealed class CvssRulesEngine(IOptions<QualityGateSettings> options)
+public sealed class CvssRulesEngine
 {
-    private readonly QualityGateSettings _settings = options.Value;
-
-    public QualityGateResult Evaluate(ScanEvent scanEvent)
+    public QualityGateResult Evaluate(IReadOnlyCollection<ScanResult> scanResults, string? deploymentId = null)
     {
-        var criticalCount = scanEvent.Findings.Count(finding => finding.Severity == FindingSeverity.Critical);
-        var highCount = scanEvent.Findings.Count(finding => finding.Severity == FindingSeverity.High);
-        var result = new QualityGateResult
+        ArgumentNullException.ThrowIfNull(scanResults);
+
+        if (scanResults.Count == 0)
         {
-            ScanId = scanEvent.ScanId,
-            DeploymentId = scanEvent.DeploymentId,
-            CriticalCount = criticalCount,
-            HighCount = highCount,
-            EvaluatedAt = DateTime.UtcNow
+            throw new ArgumentException("At least one scan-result is required.", nameof(scanResults));
+        }
+
+        var scanId = scanResults.First().ScanId;
+        if (scanResults.Any(result => result.ScanId != scanId))
+        {
+            throw new ArgumentException("All scan-results must share the same scanId.", nameof(scanResults));
+        }
+
+        foreach (var finding in scanResults.SelectMany(result => result.Findings))
+        {
+            finding.ScanId = scanId;
+        }
+
+        var summary = BuildSummary(scanResults);
+        var verdict = EvaluateVerdict(summary);
+
+        return new QualityGateResult
+        {
+            ScanId = scanId,
+            Verdict = verdict,
+            Summary = summary,
+            Results = scanResults.ToList(),
+            RollbackTriggered = verdict == QualityGateVerdicts.Fail,
+            IssuedAt = DateTime.UtcNow,
+            DeploymentId = deploymentId
         };
-
-        if (criticalCount > _settings.MaxCriticalAllowed)
-        {
-            return Fail(result, $"{criticalCount} critical vulnerabilities detected (maximum allowed: {_settings.MaxCriticalAllowed})");
-        }
-
-        if (highCount > _settings.MaxHighAllowed)
-        {
-            return Fail(result, $"{highCount} high vulnerabilities detected (maximum allowed: {_settings.MaxHighAllowed})");
-        }
-
-        var blockingFinding = scanEvent.Findings
-            .OrderByDescending(finding => finding.CvssScore)
-            .FirstOrDefault(finding => finding.CvssScore >= _settings.MinCvssScoreToBlock);
-
-        if (blockingFinding is not null)
-        {
-            return Fail(result, $"Finding '{blockingFinding.Title}' has CVSS score {blockingFinding.CvssScore:0.0} (minimum to block: {_settings.MinCvssScoreToBlock:0.0})");
-        }
-
-        result.Passed = true;
-        result.Action = QualityGateAction.None;
-        return result;
     }
 
-    private static QualityGateResult Fail(QualityGateResult result, string blockedBy)
+    private static SeveritySummary BuildSummary(IEnumerable<ScanResult> scanResults)
     {
-        result.Passed = false;
-        result.BlockedBy = blockedBy;
-        result.Action = string.IsNullOrWhiteSpace(result.DeploymentId)
-            ? QualityGateAction.None
-            : QualityGateAction.Rollback;
+        var findings = scanResults.SelectMany(result => result.Findings);
+        return new SeveritySummary
+        {
+            Critical = findings.Count(finding => finding.Severity == FindingSeverity.Critical),
+            High = findings.Count(finding => finding.Severity == FindingSeverity.High),
+            Medium = findings.Count(finding => finding.Severity == FindingSeverity.Medium),
+            Low = findings.Count(finding => finding.Severity == FindingSeverity.Low),
+            Info = findings.Count(finding => finding.Severity == FindingSeverity.Info)
+        };
+    }
 
-        return result;
+    private static string EvaluateVerdict(SeveritySummary summary)
+    {
+        if (summary.Critical > 0 || summary.High > 0)
+        {
+            return QualityGateVerdicts.Fail;
+        }
+
+        if (summary.Medium > 0 || summary.Low > 0)
+        {
+            return QualityGateVerdicts.Warning;
+        }
+
+        return QualityGateVerdicts.Pass;
     }
 }

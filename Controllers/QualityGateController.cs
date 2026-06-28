@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using QualityGateService.Config;
 using QualityGateService.Models;
 using QualityGateService.Services;
 
@@ -9,8 +11,11 @@ namespace QualityGateService.Controllers;
 public sealed class QualityGateController(
     IQualityGateEvaluatorService evaluatorService,
     IRollbackService rollbackService,
+    IOptions<QualityGateSettings> options,
     ILogger<QualityGateController> logger) : ControllerBase
 {
+    private readonly QualityGateSettings _settings = options.Value;
+
     /// <summary>
     /// Evaluates normalized findings and returns the quality gate decision.
     /// </summary>
@@ -46,6 +51,12 @@ public sealed class QualityGateController(
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Rollback([FromRoute] string deploymentId, CancellationToken cancellationToken)
     {
+        var tokenValidation = ValidateInternalToken();
+        if (tokenValidation is not null)
+        {
+            return tokenValidation;
+        }
+
         try
         {
             var result = await rollbackService.RollbackAsync(deploymentId, cancellationToken);
@@ -61,5 +72,21 @@ public sealed class QualityGateController(
             logger.LogError(ex, "Rollback request failed for deployment {DeploymentId}", deploymentId);
             return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Rollback request failed." });
         }
+    }
+
+    private IActionResult? ValidateInternalToken()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.InternalToken))
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Internal token is not configured." });
+        }
+
+        if (!Request.Headers.TryGetValue("X-Internal-Token", out var token)
+            || !string.Equals(token, _settings.InternalToken, StringComparison.Ordinal))
+        {
+            return Unauthorized(new { error = "Invalid internal token." });
+        }
+
+        return null;
     }
 }

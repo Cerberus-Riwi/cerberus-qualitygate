@@ -16,6 +16,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(finding => finding.Title).HasMaxLength(256).IsRequired();
             entity.Property(finding => finding.Description).HasMaxLength(2048);
             entity.Property(finding => finding.Severity).HasConversion<string>().HasMaxLength(32);
+            entity.Property(finding => finding.RuleId).HasMaxLength(256);
+            entity.Property(finding => finding.FilePath).HasMaxLength(1024);
+            entity.Property(finding => finding.Recommendation).HasMaxLength(2048);
             entity.Property(finding => finding.CvssScore).HasPrecision(4, 1);
             entity.Property(finding => finding.CvssVector).HasMaxLength(512);
             entity.Property(finding => finding.CweId).HasMaxLength(64);
@@ -27,8 +30,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<QualityGateResult>(entity =>
         {
             entity.HasKey(result => result.Id);
-            entity.Property(result => result.BlockedBy).HasMaxLength(512);
-            entity.Property(result => result.Action).HasConversion<string>().HasMaxLength(32);
+            entity.Property(result => result.Verdict).HasMaxLength(32).IsRequired();
+            entity.OwnsOne(result => result.Summary);
+            entity.Ignore(result => result.Results);
             entity.Property(result => result.DeploymentId).HasMaxLength(256);
             entity.HasIndex(result => result.ScanId);
             entity.HasIndex(result => result.DeploymentId);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -14,7 +15,7 @@ builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
     {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -47,20 +48,16 @@ builder.Services
         settings.KubernetesNamespace = GetSetting(configuration, "KUBERNETES_NAMESPACE", settings.KubernetesNamespace);
         settings.KubernetesApiUrl = GetSetting(configuration, "K8S_API_URL", settings.KubernetesApiUrl);
         settings.KubernetesServiceAccountToken = GetOptionalSetting(configuration, "K8S_SERVICE_ACCOUNT_TOKEN", settings.KubernetesServiceAccountToken);
+        settings.InternalToken = GetOptionalSetting(configuration, "QUALITY_GATE_INTERNAL_TOKEN", settings.InternalToken);
 
-        if (int.TryParse(configuration["MAX_CRITICAL_ALLOWED"], out var maxCriticalAllowed))
+        if (int.TryParse(configuration["EXPECTED_SCAN_RESULTS_PER_SCAN"], out var expectedScanResultsPerScan))
         {
-            settings.MaxCriticalAllowed = maxCriticalAllowed;
+            settings.ExpectedScanResultsPerScan = expectedScanResultsPerScan;
         }
 
-        if (int.TryParse(configuration["MAX_HIGH_ALLOWED"], out var maxHighAllowed))
+        if (int.TryParse(configuration["PENDING_SCAN_TIMEOUT_SECONDS"], out var pendingScanTimeoutSeconds))
         {
-            settings.MaxHighAllowed = maxHighAllowed;
-        }
-
-        if (decimal.TryParse(configuration["MIN_CVSS_SCORE_TO_BLOCK"], out var minCvssScoreToBlock))
-        {
-            settings.MinCvssScoreToBlock = minCvssScoreToBlock;
+            settings.PendingScanTimeoutSeconds = pendingScanTimeoutSeconds;
         }
     })
     .ValidateDataAnnotations();
@@ -76,6 +73,7 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 });
 
 builder.Services.AddScoped<CvssRulesEngine>();
+builder.Services.AddSingleton<QualityGateAggregationService>();
 builder.Services.AddScoped<IQualityGateEvaluatorService, QualityGateEvaluatorService>();
 builder.Services.AddScoped<IRollbackService, RollbackService>();
 builder.Services.AddHostedService<RabbitMQConsumerService>();
@@ -86,6 +84,12 @@ builder.Services.AddHttpClient<IRollbackService, RollbackService>((serviceProvid
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.Migrate();
+}
 
 if (app.Environment.IsDevelopment())
 {

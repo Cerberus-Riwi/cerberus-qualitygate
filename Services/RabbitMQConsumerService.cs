@@ -12,18 +12,20 @@ namespace QualityGateService.Services;
 public sealed class RabbitMQConsumerService(
     IServiceScopeFactory scopeFactory,
     IOptions<QualityGateSettings> options,
+    QualityGateAggregationService aggregationService,
     ILogger<RabbitMQConsumerService> logger) : BackgroundService
 {
     private readonly QualityGateSettings _settings = options.Value;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter() }
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
     private IConnection? _connection;
     private IModel? _channel;
+    private readonly object _channelLock = new();
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
@@ -52,7 +54,11 @@ public sealed class RabbitMQConsumerService(
             logger.LogError(ex, "RabbitMQ consumer could not be started.");
         }
 
-        return Task.CompletedTask;
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(1, _settings.PendingScanTimeoutSeconds / 2)));
+        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            await PublishExpiredScansAsync(stoppingToken);
+        }
     }
 
     private async Task HandleMessageAsync(object sender, BasicDeliverEventArgs eventArgs)
@@ -68,18 +74,54 @@ public sealed class RabbitMQConsumerService(
             var scanEvent = JsonSerializer.Deserialize<ScanEvent>(body, _jsonOptions)
                 ?? throw new InvalidOperationException("RabbitMQ message body could not be deserialized.");
 
-            using var scope = scopeFactory.CreateScope();
-            var evaluator = scope.ServiceProvider.GetRequiredService<IQualityGateEvaluatorService>();
-            var result = await evaluator.EvaluateAsync(scanEvent);
+            var pendingState = aggregationService.Add(scanEvent);
+            if (pendingState.IsReady && pendingState.ScanEvent is not null)
+            {
+                await EvaluateAndPublishAsync(pendingState.ScanEvent);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Scan {ScanId} is waiting for more scan-results. Current count: {ResultCount}",
+                    pendingState.ScanId,
+                    pendingState.ResultCount);
+            }
 
-            PublishResult(result);
-            _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+            lock (_channelLock)
+            {
+                _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+            }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to process RabbitMQ quality gate message.");
-            _channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
+            lock (_channelLock)
+            {
+                _channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
+            }
         }
+    }
+
+    private async Task PublishExpiredScansAsync(CancellationToken cancellationToken)
+    {
+        foreach (var scanEvent in aggregationService.TakeExpired())
+        {
+            logger.LogWarning(
+                "Scan {ScanId} reached aggregation timeout. Evaluating with {ResultCount} scan-result(s).",
+                scanEvent.ScanId,
+                scanEvent.Results.Count);
+
+            await EvaluateAndPublishAsync(scanEvent, cancellationToken);
+        }
+    }
+
+    private async Task EvaluateAndPublishAsync(ScanEvent scanEvent, CancellationToken cancellationToken = default)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IQualityGateEvaluatorService>();
+        var result = await evaluator.EvaluateAsync(scanEvent, cancellationToken);
+
+        PublishResult(result);
     }
 
     private void PublishResult(QualityGateResult result)
@@ -94,11 +136,14 @@ public sealed class RabbitMQConsumerService(
         properties.Persistent = true;
         properties.ContentType = "application/json";
 
-        _channel.BasicPublish(
-            exchange: _settings.RabbitMQResultsExchange,
-            routingKey: string.Empty,
-            basicProperties: properties,
-            body: Encoding.UTF8.GetBytes(payload));
+        lock (_channelLock)
+        {
+            _channel.BasicPublish(
+                exchange: _settings.RabbitMQResultsExchange,
+                routingKey: string.Empty,
+                basicProperties: properties,
+                body: Encoding.UTF8.GetBytes(payload));
+        }
     }
 
     public override void Dispose()
