@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("QualityGateService")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f2a0001b45c090d87a34dda46400d8fc8035cf91")]
 [assembly: System.Reflection.AssemblyProductAttribute("QualityGateService")]
 [assembly: System.Reflection.AssemblyTitleAttribute("QualityGateService")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
