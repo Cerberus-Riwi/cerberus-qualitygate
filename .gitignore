@@ -1,0 +1,60 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+artifacts/
+
+# .NET user/local files
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.nupkg
+*.snupkg
+TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+
+# ASP.NET local config and secrets
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+*.env
+.env
+.env.*
+!.env.example
+
+# IDEs/editors
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and temp files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Docker/local overrides
+docker-compose.override.yml

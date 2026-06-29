@@ -1,0 +1,27 @@
+services:
+  qualitygate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cerberus-qualitygate:local
+    container_name: cerberus-qualitygate
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DB_CONNECTION_STRING: ${DB_CONNECTION_STRING}
+      RABBITMQ_HOST: ${RABBITMQ_HOST}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE:-cerberus.quality-gate.queue}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-cerberus.findings.ready}
+      RABBITMQ_RESULTS_EXCHANGE: ${RABBITMQ_RESULTS_EXCHANGE:-cerberus.gate.results}
+      EXPECTED_SCAN_RESULTS_PER_SCAN: ${EXPECTED_SCAN_RESULTS_PER_SCAN:-2}
+      PENDING_SCAN_TIMEOUT_SECONDS: ${PENDING_SCAN_TIMEOUT_SECONDS:-30}
+      QUALITY_GATE_INTERNAL_TOKEN: ${QUALITY_GATE_INTERNAL_TOKEN}
+      KUBERNETES_NAMESPACE: ${KUBERNETES_NAMESPACE:-cerberus}
+      K8S_API_URL: ${K8S_API_URL:-https://kubernetes.default.svc}
+      K8S_SERVICE_ACCOUNT_TOKEN: ${K8S_SERVICE_ACCOUNT_TOKEN:-}
+      K8S_SERVICE_ACCOUNT_TOKEN_PATH: ${K8S_SERVICE_ACCOUNT_TOKEN_PATH:-/var/run/secrets/kubernetes.io/serviceaccount/token}
+    ports:
+      - "5070:8080"
+    restart: unless-stopped
