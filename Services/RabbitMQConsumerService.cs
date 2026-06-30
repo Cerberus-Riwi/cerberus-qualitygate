@@ -36,10 +36,22 @@ public sealed class RabbitMQConsumerService(
                 Port = _settings.RabbitMQPort,
                 UserName = _settings.RabbitMQUsername,
                 Password = _settings.RabbitMQPassword,
-                DispatchConsumersAsync = true
+                DispatchConsumersAsync = true,
+                // Evita que CreateConnection() se quede colgado indefinidamente
+                // si el broker no responde (DNS lento, red caída, firewall, etc).
+                RequestedConnectionTimeout = TimeSpan.FromSeconds(10),
+                SocketReadTimeout = TimeSpan.FromSeconds(10),
+                SocketWriteTimeout = TimeSpan.FromSeconds(10),
+                AutomaticRecoveryEnabled = true,
+                NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
             };
 
-            _connection = factory.CreateConnection();
+            // CreateConnection() es síncrona y bloqueante (no acepta CancellationToken),
+            // así que la sacamos a un hilo de pool con un timeout duro para no
+            // dejar atascado este BackgroundService si el broker no responde.
+            _connection = await Task.Run(() => factory.CreateConnection(), stoppingToken)
+                .WaitAsync(TimeSpan.FromSeconds(15), stoppingToken);
+
             _channel = _connection.CreateModel();
             _channel.ExchangeDeclare(_settings.RabbitMQExchange, ExchangeType.Fanout, durable: true);
             _channel.ExchangeDeclare(_settings.RabbitMQResultsExchange, ExchangeType.Fanout, durable: true);
@@ -53,16 +65,62 @@ public sealed class RabbitMQConsumerService(
             _channel.BasicConsume(_settings.RabbitMQQueue, autoAck: false, consumer);
             logger.LogInformation("RabbitMQ consumer started on queue {Queue}", _settings.RabbitMQQueue);
         }
+        catch (OperationCanceledException)
+        {
+            // Shutdown solicitado mientras se conectaba: no es un error, solo salimos.
+            return;
+        }
+        catch (TimeoutException ex)
+        {
+            logger.LogError(ex, "Timed out connecting to RabbitMQ. Consumer will not start.");
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "RabbitMQ consumer could not be started.");
         }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(1, _settings.PendingScanTimeoutSeconds / 2)));
-        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+        try
         {
-            await PublishExpiredScansAsync(stoppingToken);
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(1, _settings.PendingScanTimeoutSeconds / 2)));
+            while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                await PublishExpiredScansAsync(stoppingToken);
+            }
         }
+        catch (OperationCanceledException)
+        {
+            // Shutdown normal vía stoppingToken: no es un error.
+        }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        // Garantiza que el cierre de RabbitMQ no bloquee el shutdown del pod.
+        // Si el broker no responde al Close(), no esperamos más de 5s.
+        try
+        {
+            await Task.Run(() =>
+            {
+                lock (_channelLock)
+                {
+                    if (_channel?.IsOpen == true)
+                    {
+                        _channel.Close();
+                    }
+
+                    if (_connection?.IsOpen == true)
+                    {
+                        _connection.Close(TimeSpan.FromSeconds(5));
+                    }
+                }
+            }).WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error closing RabbitMQ connection during shutdown. Forcing dispose.");
+        }
+
+        await base.StopAsync(cancellationToken);
     }
 
     private async Task HandleMessageAsync(object sender, BasicDeliverEventArgs eventArgs)
