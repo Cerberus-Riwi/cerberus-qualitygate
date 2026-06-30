@@ -10,6 +10,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema("cerberus");
+
         modelBuilder.Entity<Finding>(entity =>
         {
             entity.HasKey(finding => finding.Id);
