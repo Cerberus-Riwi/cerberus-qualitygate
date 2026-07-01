@@ -78,7 +78,8 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
         ?? configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Database connection string is not configured.");
 
-    options.UseNpgsql(connectionString);
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "cerberus"));
 });
 
 builder.Services.AddScoped<CvssRulesEngine>();
